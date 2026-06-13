@@ -1,0 +1,175 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}销售分析 - 新能源汽车销售数据分析平台{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>销售分析</h2>
+</div>
+
+<div class="filter-bar">
+    <label>时间周期:</label>
+    <select id="period-select">
+        <option value="month">按月</option>
+        <option value="year">按年</option>
+    </select>
+    <button onclick="reloadTrend()">刷新</button>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>销售趋势变化</h3>
+        <div id="sales-trend-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>车型类型分布</h3>
+        <div id="vehicle-type-chart" class="chart-container large"></div>
+    </div>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>销售渠道分布</h3>
+        <div id="channel-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>付款方式分布</h3>
+        <div id="payment-chart" class="chart-container large"></div>
+    </div>
+</div>
+
+<div class="chart-card" style="margin-bottom: 24px;">
+    <h3>销售记录列表</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>订单号</th>
+                <th>日期</th>
+                <th>车型</th>
+                <th>品牌</th>
+                <th>经销商</th>
+                <th>成交价格(万元)</th>
+                <th>渠道</th>
+                <th>满意度</th>
+            </tr>
+        </thead>
+        <tbody id="sales-table">
+            <tr><td colspan="8" class="loading">加载中...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let trendChart, typeChart, channelChart, paymentChart;
+
+function reloadTrend() {
+    const period = document.getElementById('period-select').value;
+    fetch('/api/trend/?period=' + period)
+        .then(r => r.json())
+        .then(data => {
+            trendChart.setOption({
+                xAxis: { data: data.map(d => d.date) },
+                series: [
+                    { data: data.map(d => d.sales) },
+                    { data: data.map(d => d.revenue) }
+                ]
+            });
+        });
+}
+
+// 销售趋势
+trendChart = echarts.init(document.getElementById('sales-trend-chart'));
+fetch('/api/trend/?period=month')
+    .then(r => r.json())
+    .then(data => {
+        trendChart.setOption({
+            tooltip: { trigger: 'axis' },
+            legend: { data: ['销量', '销售额'] },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: { type: 'category', data: data.map(d => d.date), boundaryGap: false },
+            yAxis: [
+                { type: 'value', name: '销量' },
+                { type: 'value', name: '销售额(万元)' }
+            ],
+            series: [
+                { name: '销量', type: 'line', data: data.map(d => d.sales), smooth: true, areaStyle: { opacity: 0.2 }, itemStyle: { color: '#1890ff' } },
+                { name: '销售额', type: 'bar', yAxisIndex: 1, data: data.map(d => d.revenue), itemStyle: { color: '#52c41a' } }
+            ]
+        });
+    });
+
+// 车型类型
+typeChart = echarts.init(document.getElementById('vehicle-type-chart'));
+fetch('/api/vehicle-type/')
+    .then(r => r.json())
+    .then(data => {
+        typeChart.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                data: data.map(d => ({ name: d.type, value: d.sales })),
+                label: { formatter: '{b}\n{d}%' }
+            }]
+        });
+    });
+
+// 渠道分布
+channelChart = echarts.init(document.getElementById('channel-chart'));
+fetch('/api/channel/')
+    .then(r => r.json())
+    .then(data => {
+        channelChart.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: '60%',
+                roseType: 'area',
+                data: data.map(d => ({ name: d.channel, value: d.count }))
+            }]
+        });
+    });
+
+// 付款方式
+paymentChart = echarts.init(document.getElementById('payment-chart'));
+fetch('/api/sales/')
+    .then(r => r.json())
+    .then(data => {
+        const payments = {};
+        const methods = {'full': '全款', 'loan': '贷款', 'lease': '租赁'};
+        (data.results || []).forEach(s => {
+            const name = methods[s.payment_method] || s.payment_method;
+            payments[name] = (payments[name] || 0) + 1;
+        });
+        paymentChart.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: ['30%', '60%'],
+                data: Object.entries(payments).map(([k, v]) => ({ name: k, value: v }))
+            }]
+        });
+    });
+
+// 销售记录表格
+fetch('/api/sales/?page_size=10')
+    .then(r => r.json())
+    .then(data => {
+        const tbody = document.getElementById('sales-table');
+        tbody.innerHTML = (data.results || []).map(s => `
+            <tr>
+                <td>${s.order_no}</td>
+                <td>${s.sale_date}</td>
+                <td>${s.vehicle_name}</td>
+                <td>${s.brand_name}</td>
+                <td>${s.dealer_name}</td>
+                <td>${s.sale_price}</td>
+                <td>${s.channel === 'offline' ? '线下' : s.channel === 'online' ? '线上' : '电话'}</td>
+                <td>${s.satisfaction_score}</td>
+            </tr>
+        `).join('');
+    });
+</script>
+{% endblock %}

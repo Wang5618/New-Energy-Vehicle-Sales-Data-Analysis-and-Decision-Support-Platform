@@ -1,0 +1,117 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}客户分析 - 新能源汽车销售数据分析平台{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>客户分析</h2>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>年龄分布</h3>
+        <div id="age-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>性别分布</h3>
+        <div id="gender-chart" class="chart-container large"></div>
+    </div>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>收入水平分布</h3>
+        <div id="income-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>满意度评分分布</h3>
+        <div id="satisfaction-chart" class="chart-container large"></div>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-label">客户总数</div>
+        <div class="stat-value" id="total-customers">-</div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-label">回头客比例</div>
+        <div class="stat-value" id="returning-rate">-%</div>
+    </div>
+    <div class="stat-card orange">
+        <div class="stat-label">平均满意度</div>
+        <div class="stat-value" id="avg-satisfaction">-</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/api/customer-analysis/')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('total-customers').textContent = data.total_customers.toLocaleString();
+        document.getElementById('returning-rate').textContent = data.returning_rate + '%';
+
+        // 年龄分布
+        echarts.init(document.getElementById('age-chart')).setOption({
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: data.age_distribution.map(d => d.group) },
+            yAxis: { type: 'value' },
+            series: [{
+                type: 'bar',
+                data: data.age_distribution.map(d => d.count),
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#1890ff' }, { offset: 1, color: '#36cfc9' }
+                    ])
+                }
+            }]
+        });
+
+        // 性别分布
+        echarts.init(document.getElementById('gender-chart')).setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                data: data.gender_distribution.map(d => ({ name: d.gender, value: d.count })),
+                color: ['#1890ff', '#eb2f96']
+            }]
+        });
+
+        // 收入水平
+        echarts.init(document.getElementById('income-chart')).setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: '60%',
+                roseType: 'area',
+                data: data.income_distribution.map(d => ({ name: d.level + '收入', value: d.count }))
+            }]
+        });
+    });
+
+// 满意度分布
+fetch('/api/satisfaction/')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('avg-satisfaction').textContent = data.average_score;
+        echarts.init(document.getElementById('satisfaction-chart')).setOption({
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: data.score_distribution.map(d => d.score + '分') },
+            yAxis: { type: 'value' },
+            series: [{
+                type: 'bar',
+                data: data.score_distribution.map(d => d.count),
+                itemStyle: {
+                    color: params => {
+                        const colors = ['#f5222d', '#f5222d', '#fa8c16', '#fa8c16', '#1890ff', '#1890ff', '#52c41a', '#52c41a', '#52c41a', '#52c41a'];
+                        return colors[params.dataIndex] || '#999';
+                    }
+                }
+            }]
+        });
+    });
+</script>
+{% endblock %}

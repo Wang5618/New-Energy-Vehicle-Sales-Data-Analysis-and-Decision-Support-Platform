@@ -1,0 +1,127 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}预测决策 - 新能源汽车销售数据分析平台{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>预测决策支持</h2>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>销售趋势预测</h3>
+        <div id="forecast-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>决策建议</h3>
+        <div style="padding: 20px;">
+            <div style="margin-bottom: 20px; padding: 16px; background: #e6f7ff; border-radius: 8px; border-left: 4px solid #1890ff;">
+                <h4 style="color: #1890ff; margin-bottom: 8px;">库存优化建议</h4>
+                <p style="color: #333; line-height: 1.6;">根据近期销售趋势，建议增加 <strong>比亚迪</strong> 和 <strong>特斯拉</strong> 热门车型的库存储备。同时关注 <strong>五菱宏光MINI EV</strong> 在低线城市的补货需求。</p>
+            </div>
+            <div style="margin-bottom: 20px; padding: 16px; background: #f6ffed; border-radius: 8px; border-left: 4px solid #52c41a;">
+                <h4 style="color: #52c41a; margin-bottom: 8px;">营销策略建议</h4>
+                <p style="color: #333; line-height: 1.6;">26-45岁中青年群体为主要购买力，建议针对该年龄段推出金融分期优惠。增程式车型增长迅速，可加大推广力度。</p>
+            </div>
+            <div style="margin-bottom: 20px; padding: 16px; background: #fff7e6; border-radius: 8px; border-left: 4px solid #fa8c16;">
+                <h4 style="color: #fa8c16; margin-bottom: 8px;">区域拓展建议</h4>
+                <p style="color: #333; line-height: 1.6;">二线城市销量增速明显，建议在成都、杭州、南京等城市增设体验中心。三四线城市新能源渗透率正在提升，是增量市场。</p>
+            </div>
+            <div style="padding: 16px; background: #f9f0ff; border-radius: 8px; border-left: 4px solid #722ed1;">
+                <h4 style="color: #722ed1; margin-bottom: 8px;">产品策略建议</h4>
+                <p style="color: #333; line-height: 1.6;">15-25万元价格带竞争最为激烈且销量最大，建议重点布局该区间车型。同时关注高端市场（30万+）的增长潜力。</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>热销车型排行</h3>
+        <div id="top-vehicles-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>动力类型趋势</h3>
+        <div id="power-trend-chart" class="chart-container large"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 预测图
+fetch('/api/forecast/')
+    .then(r => r.json())
+    .then(data => {
+        const months = ['-5月', '-4月', '-3月', '-2月', '-1月', '本月'];
+        const historical = data.historical;
+        const forecast = data.forecast;
+
+        echarts.init(document.getElementById('forecast-chart')).setOption({
+            tooltip: { trigger: 'axis' },
+            legend: { data: ['历史销量', '预测销量'] },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: {
+                type: 'category',
+                data: [...months, ...forecast.map(f => f.month)]
+            },
+            yAxis: { type: 'value' },
+            series: [
+                {
+                    name: '历史销量',
+                    type: 'line',
+                    data: [...historical, null, null, null],
+                    smooth: true,
+                    itemStyle: { color: '#1890ff' },
+                    areaStyle: { opacity: 0.2 }
+                },
+                {
+                    name: '预测销量',
+                    type: 'line',
+                    data: [null, null, null, null, null, historical[historical.length - 1], ...forecast.map(f => f.predicted)],
+                    smooth: true,
+                    lineStyle: { type: 'dashed' },
+                    itemStyle: { color: '#fa8c16' }
+                }
+            ]
+        });
+    });
+
+// 热销车型
+fetch('/api/top-vehicles/?limit=10')
+    .then(r => r.json())
+    .then(data => {
+        echarts.init(document.getElementById('top-vehicles-chart')).setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: { type: 'value' },
+            yAxis: { type: 'category', data: data.map(d => d.vehicle).reverse() },
+            series: [{
+                type: 'bar',
+                data: data.map(d => d.sales).reverse(),
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#1890ff' }, { offset: 1, color: '#36cfc9' }
+                    ])
+                },
+                label: { show: true, position: 'right' }
+            }]
+        });
+    });
+
+// 动力类型
+fetch('/api/power-type/')
+    .then(r => r.json())
+    .then(data => {
+        echarts.init(document.getElementById('power-trend-chart')).setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                data: data.map(d => ({ name: d.type, value: d.sales })),
+                label: { formatter: '{b}\n{d}%' }
+            }]
+        });
+    });
+</script>
+{% endblock %}

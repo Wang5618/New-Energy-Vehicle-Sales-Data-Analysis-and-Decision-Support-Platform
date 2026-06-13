@@ -1,0 +1,104 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}区域分析 - 新能源汽车销售数据分析平台{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>区域分析</h2>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>省份销量排行</h3>
+        <div id="province-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>城市销量TOP20</h3>
+        <div id="city-chart" class="chart-container large"></div>
+    </div>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>城市等级分布</h3>
+        <div id="tier-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>区域销售额</h3>
+        <div id="region-revenue-chart" class="chart-container large"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/api/region-analysis/')
+    .then(r => r.json())
+    .then(data => {
+        echarts.init(document.getElementById('province-chart')).setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: { type: 'value' },
+            yAxis: { type: 'category', data: data.map(d => d.region).reverse() },
+            series: [{
+                type: 'bar',
+                data: data.map(d => d.sales).reverse(),
+                itemStyle: { color: '#1890ff', borderRadius: [0, 4, 4, 0] },
+                label: { show: true, position: 'right' }
+            }]
+        });
+
+        echarts.init(document.getElementById('region-revenue-chart')).setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: { type: 'category', data: data.map(d => d.region) },
+            yAxis: { type: 'value', name: '万元' },
+            series: [{
+                type: 'bar',
+                data: data.map(d => d.revenue),
+                itemStyle: { color: '#52c41a' }
+            }]
+        });
+    });
+
+fetch('/api/city-analysis/')
+    .then(r => r.json())
+    .then(data => {
+        echarts.init(document.getElementById('city-chart')).setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+            xAxis: { type: 'value' },
+            yAxis: { type: 'category', data: data.map(d => d.city).reverse() },
+            series: [{
+                type: 'bar',
+                data: data.map(d => d.sales).reverse(),
+                itemStyle: {
+                    color: params => {
+                        const tiers = ['#f5222d', '#fa8c16', '#1890ff', '#52c41a', '#722ed1'];
+                        const tier = data[data.length - 1 - params.dataIndex].tier;
+                        return tiers[tier - 1] || '#999';
+                    }
+                }
+            }]
+        });
+
+        // 城市等级分布
+        const tierCount = {};
+        data.forEach(d => {
+            tierCount[d.tier] = (tierCount[d.tier] || 0) + d.sales;
+        });
+        const tierNames = {1: '一线', 2: '二线', 3: '三线', 4: '四线', 5: '五线'};
+        echarts.init(document.getElementById('tier-chart')).setOption({
+            tooltip: { trigger: 'item' },
+            legend: { orient: 'vertical', left: 'left' },
+            series: [{
+                type: 'pie',
+                radius: '60%',
+                data: Object.entries(tierCount).map(([k, v]) => ({
+                    name: tierNames[k] + '城市', value: v
+                }))
+            }]
+        });
+    });
+</script>
+{% endblock %}

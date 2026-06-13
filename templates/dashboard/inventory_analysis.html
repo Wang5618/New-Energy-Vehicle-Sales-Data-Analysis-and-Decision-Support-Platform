@@ -1,0 +1,118 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}库存分析 - 新能源汽车销售数据分析平台{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>库存分析</h2>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-label">库存充足</div>
+        <div class="stat-value" id="normal-stock">-</div>
+        <div class="stat-change"><span class="badge badge-success">正常</span></div>
+    </div>
+    <div class="stat-card orange">
+        <div class="stat-label">库存紧张</div>
+        <div class="stat-value" id="low-stock">-</div>
+        <div class="stat-change"><span class="badge badge-warning">需关注</span></div>
+    </div>
+    <div class="stat-card red">
+        <div class="stat-label">缺货</div>
+        <div class="stat-value" id="out-stock">-</div>
+        <div class="stat-change"><span class="badge badge-danger">紧急</span></div>
+    </div>
+</div>
+
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>品牌库存分布</h3>
+        <div id="brand-inventory-chart" class="chart-container large"></div>
+    </div>
+    <div class="chart-card">
+        <h3>库存状态分布</h3>
+        <div id="stock-status-chart" class="chart-container large"></div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <h3>库存预警列表</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>车型</th>
+                <th>经销商</th>
+                <th>库存数量</th>
+                <th>安全库存</th>
+                <th>状态</th>
+            </tr>
+        </thead>
+        <tbody id="inventory-table">
+            <tr><td colspan="5" class="loading">加载中...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/api/inventory-analysis/')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('normal-stock').textContent = data.normal_stock;
+        document.getElementById('low-stock').textContent = data.low_stock;
+        document.getElementById('out-stock').textContent = data.out_of_stock;
+
+        // 品牌库存
+        echarts.init(document.getElementById('brand-inventory-chart')).setOption({
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: data.brand_inventory.map(d => d.brand) },
+            yAxis: { type: 'value' },
+            series: [{
+                type: 'bar',
+                data: data.brand_inventory.map(d => d.stock),
+                itemStyle: { color: '#1890ff' }
+            }]
+        });
+
+        // 库存状态
+        echarts.init(document.getElementById('stock-status-chart')).setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: '60%',
+                data: [
+                    { name: '充足', value: data.normal_stock },
+                    { name: '紧张', value: data.low_stock },
+                    { name: '缺货', value: data.out_of_stock }
+                ],
+                color: ['#52c41a', '#fa8c16', '#f5222d']
+            }]
+        });
+    });
+
+// 库存列表
+fetch('/api/inventory/')
+    .then(r => r.json())
+    .then(data => {
+        const tbody = document.getElementById('inventory-table');
+        const items = (data.results || []).filter(i => i.stock_quantity < i.safety_stock);
+        tbody.innerHTML = items.slice(0, 50).map(i => {
+            let statusClass = 'badge-success';
+            let statusText = '充足';
+            if (i.stock_quantity <= 0) { statusClass = 'badge-danger'; statusText = '缺货'; }
+            else if (i.stock_quantity < i.safety_stock) { statusClass = 'badge-warning'; statusText = '紧张'; }
+            return `
+                <tr>
+                    <td>${i.vehicle_name}</td>
+                    <td>${i.dealer_name}</td>
+                    <td>${i.stock_quantity}</td>
+                    <td>${i.safety_stock}</td>
+                    <td><span class="badge ${statusClass}">${statusText}</span></td>
+                </tr>
+            `;
+        }).join('');
+    });
+</script>
+{% endblock %}
